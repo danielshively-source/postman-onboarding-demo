@@ -1,0 +1,8 @@
+workflows:
+  syncSpecToCollection:
+    - spec: ../openapi/close-tasks.yaml
+      collection: ../postman/collections/floqast-close-tasks
+    - spec: ../openapi/close-tasks.yaml
+      collection: ../postman/collections/[Smoke] floqast-close-tasks
+    - spec: ../openapi/close-tasks.yaml
+      collection: ../postman/collections/[Contract] floqast-close-tasks

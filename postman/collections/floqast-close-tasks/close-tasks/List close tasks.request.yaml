@@ -1,0 +1,45 @@
+type: http
+name: List close tasks
+url: '{{baseUrl}}/close-tasks?period=string&status=in_progress'
+method: GET
+headers:
+  - key: Accept
+    value: application/json
+queryParams:
+  - key: period
+    value: string
+    description: Accounting period in YYYY-MM format.
+  - key: status
+    value: in_progress
+    description: Filter by task status.
+examples:
+  - response:
+      statusCode: 200
+      statusText: OK
+      body:
+        type: json
+        content: |-
+          {
+            "data": [
+              {
+                "id": "string",
+                "name": "string",
+                "status": "in_progress",
+                "period": "string",
+                "assignee_email": "string",
+                "due_date": "2020-09-23"
+              },
+              {
+                "id": "string",
+                "name": "string",
+                "status": "complete",
+                "period": "string",
+                "assignee_email": "string",
+                "due_date": "2015-09-22"
+              }
+            ]
+          }
+      headers:
+        - key: Content-Type
+          value: application/json
+    name: A list of close tasks.

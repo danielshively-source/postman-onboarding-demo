@@ -1,0 +1,23 @@
+workspace:
+  id: 2f251d45-74e6-4172-b63c-b15598f3f189
+localResources:
+  collections:
+    - ../postman/collections/floqast-close-tasks
+    - ../postman/collections/[Smoke] floqast-close-tasks
+    - ../postman/collections/[Contract] floqast-close-tasks
+  environments:
+    - ../postman/environments/prod.postman_environment.json
+  specs:
+    - ../examples/non-compliant/legacy-internal-api.yaml
+    - ../openapi/close-tasks.yaml
+    - ../openapi/core-payments-openapi.yaml
+    - ../openapi/reconciliations.yaml
+cloudResources:
+  collections:
+    ../postman/collections/floqast-close-tasks: 52400725-ef437978-7eb8-439a-91ca-8478173c11b7
+    ../postman/collections/[Smoke] floqast-close-tasks: 52400725-f0d00d3b-2ec2-4fe3-8a92-51d03295e934
+    ../postman/collections/[Contract] floqast-close-tasks: 52400725-c56193a3-06d9-4b30-be5a-ea9c8fdd1105
+  environments:
+    ../postman/environments/prod.postman_environment.json: 52400725-9d654302-43b0-4ed3-859a-b98c4faaf6f9
+  specs:
+    ../openapi/close-tasks.yaml: 63d34cff-52b7-446d-9b1f-e59dc2961c50
