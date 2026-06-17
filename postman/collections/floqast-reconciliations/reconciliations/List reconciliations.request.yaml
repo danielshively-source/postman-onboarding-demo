@@ -1,0 +1,59 @@
+type: http
+name: List reconciliations
+url: '{{baseUrl}}/reconciliations?status=in_review&period=string&limit=25&cursor=string'
+method: GET
+headers:
+  - key: Accept
+    value: application/json
+queryParams:
+  - key: status
+    value: in_review
+    description: Filter by review status.
+  - key: period
+    value: string
+    description: Accounting period in YYYY-MM format.
+  - key: limit
+    value: '25'
+    description: Maximum number of reconciliations to return (1-100).
+  - key: cursor
+    value: string
+    description: Opaque pagination cursor returned by a previous call.
+examples:
+  - response:
+      statusCode: 200
+      statusText: OK
+      body:
+        type: json
+        content: |-
+          {
+            "data": [
+              {
+                "id": "rec_8f2a",
+                "account_name": "Cash - Operating",
+                "period": "2026-05",
+                "gl_balance": 158230000,
+                "supporting_balance": 158230000,
+                "status": "approved",
+                "updated_at": "2026-06-02T18:04:00Z"
+              }
+            ],
+            "next_cursor": "cur_eyJwIjoy"
+          }
+      headers:
+        - key: Content-Type
+          value: application/json
+    name: A page of reconciliations.
+  - response:
+      statusCode: 401
+      statusText: Unauthorized
+      body:
+        type: json
+        content: |-
+          {
+            "code": "unauthorized",
+            "message": "Missing or invalid bearer token"
+          }
+      headers:
+        - key: Content-Type
+          value: application/json
+    name: Authentication failed or was not provided.

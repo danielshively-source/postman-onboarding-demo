@@ -1,0 +1,23 @@
+workspace:
+  id: e72dfa87-490e-420d-b055-6ea675fccbcb
+localResources:
+  collections:
+    - ../postman/collections/floqast-reconciliations
+    - ../postman/collections/[Smoke] floqast-reconciliations
+    - ../postman/collections/[Contract] floqast-reconciliations
+  environments:
+    - ../postman/environments/prod.postman_environment.json
+  specs:
+    - ../examples/non-compliant/legacy-internal-api.yaml
+    - ../openapi/close-tasks.yaml
+    - ../openapi/core-payments-openapi.yaml
+    - ../openapi/reconciliations.yaml
+cloudResources:
+  collections:
+    ../postman/collections/floqast-reconciliations: 52400725-f9247ae8-d184-4a0f-9bdc-aad387292bd4
+    ../postman/collections/[Smoke] floqast-reconciliations: 52400725-c02fe924-ab97-4eb1-9c90-c0a787d8d04f
+    ../postman/collections/[Contract] floqast-reconciliations: 52400725-f5a14dd5-85b6-489e-b2ee-07a7e578c1a4
+  environments:
+    ../postman/environments/prod.postman_environment.json: 52400725-f317ddcc-609e-4adf-b083-320cf68a5723
+  specs:
+    ../openapi/reconciliations.yaml: 586aaf9d-8a41-47d9-9703-e8bb4a9abb5b
