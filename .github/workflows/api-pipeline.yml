@@ -120,6 +120,10 @@ jobs:
     # This prevents accidental duplicate workspaces when main changes, and matches
     # the one-service-per-branch isolation model.
     if: github.event_name == 'workflow_dispatch' && vars.POSTMAN_LIVE == 'true'
+    outputs:
+      project-name: ${{ steps.meta.outputs.project-name }}
+      workspace-id: ${{ steps.onboard.outputs.workspace-id }}
+      environment-uids-json: ${{ steps.onboard.outputs.environment-uids-json }}
     steps:
       - uses: actions/checkout@v5
 
@@ -200,13 +204,86 @@ jobs:
     name: Runtime insights (security-gated)
     runs-on: ubuntu-latest
     needs: onboard
-    if: vars.POSTMAN_LIVE == 'true' && vars.INSIGHTS_SECURITY_APPROVED == 'true'
+    if: github.event_name == 'workflow_dispatch' && vars.POSTMAN_LIVE == 'true' && vars.INSIGHTS_SECURITY_APPROVED == 'true'
+    env:
+      PROJECT: ${{ needs.onboard.outputs.project-name }}
+      WORKSPACE_ID: ${{ needs.onboard.outputs.workspace-id }}
     steps:
       - uses: actions/checkout@v5
-      - name: Insights linking
+
+      - name: Start local mock service (stand-in for the FloQast service)
         run: |
-          echo "::notice::Insights runtime track is enabled. Wire postman-insights-onboarding-action@v1 here."
-          echo "See docs/PIPELINE.md (Job 5) for the ECS deployment model and the data-protection checklist."
+          nohup python3 scripts/insights_mock_service.py 8080 > mock.log 2>&1 &
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8080/reconciliations >/dev/null 2>&1 && break
+            sleep 1
+          done
+          echo "Mock service up:"; curl -s http://127.0.0.1:8080/reconciliations | head -c 200; echo
+
+      - name: Install Postman Insights agent
+        run: |
+          bash -c "$(curl -L https://releases.observability.postman.com/scripts/install-postman-insights-agent.sh)"
+          postman-insights-agent --version || true
+
+      - name: Capture mock traffic with the Insights agent
+        id: capture
+        continue-on-error: true
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+        run: |
+          set -x
+          # Capture loopback HTTP to the mock service. apidump observes traffic and
+          # uploads the characterized endpoints to the Insights project named $PROJECT.
+          sudo --preserve-env=POSTMAN_API_KEY postman-insights-agent apidump \
+            --project "$PROJECT" \
+            --interfaces lo \
+            --filter "tcp port 8080" \
+            > agent.log 2>&1 &
+          AGENT_PID=$!
+          echo "agent pid=$AGENT_PID"
+
+          # Drive ~90s of mock traffic across the modeled endpoints.
+          end=$((SECONDS+90))
+          while [ $SECONDS -lt $end ]; do
+            curl -s http://127.0.0.1:8080/reconciliations >/dev/null
+            curl -s http://127.0.0.1:8080/reconciliations/rec_1234 >/dev/null
+            curl -s -X POST http://127.0.0.1:8080/reconciliations -H 'Content-Type: application/json' -d '{"account_name":"Cash - Operating","period":"2026-05","gl_balance":1999,"supporting_balance":1999}' >/dev/null
+            curl -s http://127.0.0.1:8080/close-tasks >/dev/null
+            sleep 0.3
+          done
+
+          # Stop the agent so it finalizes and uploads the trace.
+          sudo kill -INT "$AGENT_PID" 2>/dev/null || true
+          sleep 15
+          echo "===== agent.log (tail) ====="; tail -n 60 agent.log || true
+
+      - name: Link discovered service to workspace + repo
+        id: link
+        continue-on-error: true
+        uses: postman-cs/postman-insights-onboarding-action@v1
+        with:
+          project-name: ${{ env.PROJECT }}
+          workspace-id: ${{ env.WORKSPACE_ID }}
+          environment-id: ${{ fromJSON(needs.onboard.outputs.environment-uids-json).prod }}
+          postman-region: us
+          postman-api-key: ${{ secrets.POSTMAN_API_KEY }}
+          postman-access-token: ${{ secrets.POSTMAN_ACCESS_TOKEN }}
+          poll-timeout-seconds: 180
+          poll-interval-seconds: 15
+
+      - name: Insights summary
+        if: always()
+        run: |
+          {
+            echo "## Runtime Insights (mock traffic)"
+            echo ""
+            echo "- **Agent capture:** ${{ steps.capture.outcome }} (Insights agent observed mock traffic to the local service)"
+            echo "- **Catalog link:** ${{ steps.link.outcome }} - status \`${{ steps.link.outputs.status }}\`"
+            echo "- **Discovered service:** ${{ steps.link.outputs.discovered-service-name }} (id ${{ steps.link.outputs.discovered-service-id }})"
+            echo ""
+            echo "_Mock traffic only - no customer data. For production, the agent runs as an"
+            echo "ECS sidecar/daemon; see docs/PIPELINE.md (Job 5) data-protection checklist._"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
   # Always-on pipeline map: tells the whole FloQast story in the run summary,
