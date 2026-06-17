@@ -35,7 +35,9 @@ on:
           - examples/non-compliant/legacy-internal-api.yaml  # FAILS gate (15 blockers, 17.5)
 
 concurrency:
-  group: floqast-api-pipeline-${{ github.ref }}
+  # Scope by ref + spec so different specs run in parallel, while re-runs of the
+  # same spec serialize (no race to provision the same Postman assets).
+  group: floqast-api-pipeline-${{ github.ref }}-${{ github.event.inputs.spec || 'default' }}
   cancel-in-progress: false
 
 permissions:
