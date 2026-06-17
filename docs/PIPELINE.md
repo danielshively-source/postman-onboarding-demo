@@ -122,6 +122,30 @@ governance-compliant and agent-ready are distinct bars.
 - Outcome: a FloQast engineer searches Postman first, finds the existing API + docs + tests +
   owner, and avoids rebuilding it. Same catalog becomes the trusted source for agents.
 
+### Full catalog hookup status
+
+| Catalog feature | How it's wired | Status |
+| --- | --- | --- |
+| **Repo / source-control link** | repo-sync `connectWorkspaceToRepository` via the access token (`POSTMAN_ACCESS_TOKEN`) | Active - workspace linked to its GitHub branch |
+| **Private API Network listing** | `scripts/publish_pan.py` step (`POST /network/private`) | Active - both workspaces published |
+| **CI monitoring** | Scheduled cloud smoke monitor via `monitor-cron` (`POSTMAN_MONITOR_CRON`, default `0 */6 * * *`) + smoke/contract collection runs in the pipeline | Active - monitor scheduled (next run on cron) |
+| **Dependency view** | Auto-derived by the API Catalog from the spec <-> collection <-> mock <-> monitor <-> environment relationships bootstrap creates (each workspace has 1 spec, generated collections, mock, monitor, environment) | Active - relationships present |
+| **System environments** | repo-sync `associateSystemEnvironments` via the access token, driven by `system-env-map-json` (`POSTMAN_SYSTEM_ENV_MAP`) | **Plumbed, inactive** - see prerequisite below |
+
+> **System environments prerequisite.** There is no public API to enumerate or create
+> team system environments; they are defined once by a team admin in Postman (team
+> settings / Spec Hub). After they exist, set repo variable `POSTMAN_SYSTEM_ENV_MAP` to a
+> JSON map like `{"prod":"<system-env-id>"}` and re-dispatch - the pipeline then associates
+> each Postman environment with its team system environment. Until then,
+> `environment-sync-status` reports `skipped` (no map), which is expected.
+
+### CI monitoring note
+
+The cloud monitor is the always-on monitoring signal. A *generated* in-repo
+`ci.yml` (Postman CLI smoke/contract runs) is also available via `generate-ci-workflow`,
+but committing files under `.github/workflows/` requires a PAT with `workflow` scope
+(`gh-fallback-token`); the default `GITHUB_TOKEN` is refused, so it's left off here.
+
 ---
 
 ## Job 4 - CI/CD without a rewrite
