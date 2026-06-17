@@ -1,0 +1,7 @@
+# Generated governance artifacts
+agent-readiness.json
+
+# Node / Postman tooling
+node_modules/
+.postman/cli/
+*.log
