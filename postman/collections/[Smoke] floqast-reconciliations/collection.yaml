@@ -1,0 +1,22 @@
+$schema: https://schema.postman.com/json/draft-2020-12/collection/v3.0.0/
+type: collection
+name: '[Smoke] floqast-reconciliations'
+description: |-
+  External-ready API for account reconciliations in the FloQast close platform. A reconciliation ties a general-ledger balance to a supporting balance and tracks its review/approval state. Authored to the FloQast "Stripe-level" standard and to be fully agent-ready.
+
+  Contact Support:
+   Name: Close Platform Team
+   Email: close-platform@floqast.example
+id: 01a62af7-2186-4445-ac88-c09a9dde486e
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{bearerToken}}'
+      type: string
+variables:
+  - key: baseUrl
+    value: https://api.floqast.example/v1
+items:
+  - ref: ./reconciliations/folder.yaml
+  - ref: ./00 - Resolve Secrets.request.yaml
