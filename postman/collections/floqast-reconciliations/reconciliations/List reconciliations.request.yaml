@@ -1,13 +1,13 @@
 type: http
 name: List reconciliations
-url: '{{baseUrl}}/reconciliations?status=in_review&period=string&limit=25&cursor=string'
+url: '{{baseUrl}}/reconciliations?status=approved&period=string&limit=25&cursor=string'
 method: GET
 headers:
   - key: Accept
     value: application/json
 queryParams:
   - key: status
-    value: in_review
+    value: approved
     description: Filter by review status.
   - key: period
     value: string
