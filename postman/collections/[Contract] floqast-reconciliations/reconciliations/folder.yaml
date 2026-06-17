@@ -1,6 +1,0 @@
-type: folder
-name: reconciliations
-items:
-  - ref: ./{reconciliationId}/folder.yaml
-  - ref: ./List reconciliations.request.yaml
-  - ref: ./Create a reconciliation.request.yaml

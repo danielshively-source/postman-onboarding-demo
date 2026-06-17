@@ -1,4 +1,0 @@
-type: folder
-name: '{reconciliationId}'
-items:
-  - ref: ./Retrieve a reconciliation.request.yaml

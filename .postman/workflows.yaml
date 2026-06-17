@@ -1,8 +1,0 @@
-workflows:
-  syncSpecToCollection:
-    - spec: ../openapi/reconciliations.yaml
-      collection: ../postman/collections/floqast-reconciliations
-    - spec: ../openapi/reconciliations.yaml
-      collection: ../postman/collections/[Smoke] floqast-reconciliations
-    - spec: ../openapi/reconciliations.yaml
-      collection: ../postman/collections/[Contract] floqast-reconciliations
