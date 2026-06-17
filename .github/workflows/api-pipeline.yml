@@ -126,13 +126,10 @@ jobs:
           base="$(basename "$SPEC_PATH")"
           echo "project-name=floqast-${base%.*}" >> "$GITHUB_OUTPUT"
 
-      - id: postman-token
-        name: Resolve Postman service token
-        uses: postman-cs/postman-resolve-service-token-action@v1
-        with:
-          postman-api-key: ${{ secrets.POSTMAN_API_KEY }}
-          postman-region: us
-
+      # Note: postman-resolve-service-token-action requires a *service-account* PMAK.
+      # This pipeline runs with a standard admin PMAK, so we pass it directly to the
+      # onboarding composite (postman-access-token is optional). To use a service
+      # account instead, add a resolve-service-token step and wire its token/team-id.
       - id: onboard
         name: Bootstrap, sync, and link workspace (catalog foundation)
         uses: postman-cs/postman-api-onboarding-action@v1
@@ -149,8 +146,6 @@ jobs:
           # Insights is handled in its own gated job below, not here.
           enable-insights: false
           postman-api-key: ${{ secrets.POSTMAN_API_KEY }}
-          postman-access-token: ${{ steps.postman-token.outputs.token }}
-          postman-team-id: ${{ steps.postman-token.outputs.team-id }}
           github-token: ${{ github.token }}
 
       - name: Onboarding summary
