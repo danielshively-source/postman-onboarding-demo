@@ -208,41 +208,42 @@ jobs:
     env:
       PROJECT: ${{ needs.onboard.outputs.project-name }}
       WORKSPACE_ID: ${{ needs.onboard.outputs.workspace-id }}
+      # svc_* Insights project ID. Created once in the Postman UI (no API exists):
+      # Workspace settings -> enable Insights -> Services -> Insights -> Create ->
+      # choose container env (ECS). Copy the svc_ id into this repo variable.
+      INSIGHTS_PROJECT_ID: ${{ vars.POSTMAN_INSIGHTS_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v5
 
-      - name: Start local mock service (stand-in for the FloQast service)
-        run: |
-          nohup python3 scripts/insights_mock_service.py 8080 > mock.log 2>&1 &
-          for i in $(seq 1 10); do
-            curl -fsS http://127.0.0.1:8080/reconciliations >/dev/null 2>&1 && break
-            sleep 1
-          done
-          echo "Mock service up:"; curl -s http://127.0.0.1:8080/reconciliations | head -c 200; echo
-
-      - name: Install Postman Insights agent
-        run: |
-          bash -c "$(curl -L https://releases.observability.postman.com/scripts/install-postman-insights-agent.sh)"
-          postman-insights-agent --version || true
-
-      - name: Capture mock traffic with the Insights agent
+      - name: Insights agent + mock traffic
         id: capture
         continue-on-error: true
         env:
           POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
         run: |
-          set -x
-          # Capture loopback HTTP to the mock service. apidump observes traffic and
-          # uploads the characterized endpoints to the Insights project named $PROJECT.
+          if [ -z "$INSIGHTS_PROJECT_ID" ]; then
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Set repo variable POSTMAN_INSIGHTS_PROJECT_ID (svc_*) to run the agent."
+            echo "The Insights agent requires an Insights project ID, which is created once in"
+            echo "the Postman UI (enable Insights on the workspace -> Services -> Insights ->"
+            echo "Create -> choose container env). There is no API to create it."
+            exit 0
+          fi
+
+          # Local stand-in service for the FloQast API (mock traffic only, no real data).
+          nohup python3 scripts/insights_mock_service.py 8080 > mock.log 2>&1 &
+          for i in $(seq 1 10); do
+            curl -fsS http://127.0.0.1:8080/reconciliations >/dev/null 2>&1 && break; sleep 1
+          done
+
+          bash -c "$(curl -L https://releases.observability.postman.com/scripts/install-postman-insights-agent.sh)"
+
+          # apidump observes loopback HTTP and uploads characterized endpoints to the project.
           sudo --preserve-env=POSTMAN_API_KEY postman-insights-agent apidump \
-            --project "$PROJECT" \
-            --interfaces lo \
-            --filter "tcp port 8080" \
+            --project "$INSIGHTS_PROJECT_ID" --interfaces lo --filter "tcp port 8080" \
             > agent.log 2>&1 &
           AGENT_PID=$!
-          echo "agent pid=$AGENT_PID"
 
-          # Drive ~90s of mock traffic across the modeled endpoints.
           end=$((SECONDS+90))
           while [ $SECONDS -lt $end ]; do
             curl -s http://127.0.0.1:8080/reconciliations >/dev/null
@@ -252,13 +253,13 @@ jobs:
             sleep 0.3
           done
 
-          # Stop the agent so it finalizes and uploads the trace.
           sudo kill -INT "$AGENT_PID" 2>/dev/null || true
           sleep 15
           echo "===== agent.log (tail) ====="; tail -n 60 agent.log || true
 
       - name: Link discovered service to workspace + repo
         id: link
+        if: steps.capture.outputs.skipped != 'true'
         continue-on-error: true
         uses: postman-cs/postman-insights-onboarding-action@v1
         with:
@@ -277,12 +278,17 @@ jobs:
           {
             echo "## Runtime Insights (mock traffic)"
             echo ""
-            echo "- **Agent capture:** ${{ steps.capture.outcome }} (Insights agent observed mock traffic to the local service)"
-            echo "- **Catalog link:** ${{ steps.link.outcome }} - status \`${{ steps.link.outputs.status }}\`"
-            echo "- **Discovered service:** ${{ steps.link.outputs.discovered-service-name }} (id ${{ steps.link.outputs.discovered-service-id }})"
+            if [ "${{ steps.capture.outputs.skipped }}" = "true" ]; then
+              echo ":warning: **Prerequisite:** create an Insights project in the Postman UI and set"
+              echo "repo variable \`POSTMAN_INSIGHTS_PROJECT_ID\` (svc_*). No API exists to create it."
+            else
+              echo "- **Agent capture:** ${{ steps.capture.outcome }} - Insights agent observed mock traffic to the local service"
+              echo "- **Catalog link:** ${{ steps.link.outcome }} - status \`${{ steps.link.outputs.status }}\`"
+              echo "- **Discovered service:** ${{ steps.link.outputs.discovered-service-name }} (id ${{ steps.link.outputs.discovered-service-id }})"
+            fi
             echo ""
-            echo "_Mock traffic only - no customer data. For production, the agent runs as an"
-            echo "ECS sidecar/daemon; see docs/PIPELINE.md (Job 5) data-protection checklist._"
+            echo "_Mock traffic only - no customer data. In production the agent runs as an ECS"
+            echo "sidecar/daemon; see docs/PIPELINE.md (Job 5) data-protection checklist._"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------

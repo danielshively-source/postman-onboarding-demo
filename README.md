@@ -88,6 +88,7 @@ push to main / PR / dispatch
 | `READINESS_MIN_SCORE` | variable | Optional. Set (e.g. `80`) to turn agent-readiness into a hard gate; unset = advisory. |
 | `POSTMAN_MONITOR_CRON` | variable | Optional. Cloud monitor schedule for CI monitoring (default `0 */6 * * *`). |
 | `POSTMAN_SYSTEM_ENV_MAP` | variable | Optional. JSON `{env-slug: system-env-id}` to associate Postman envs with team system environments. |
+| `POSTMAN_INSIGHTS_PROJECT_ID` | variable | Optional. Insights project ID (`svc_*`, UI-created) enabling the agent + mock-traffic capture in the `insights` job. |
 
 **Gating model:** governance is the **hard gate** (blockers fail the build). Agent-readiness
 is **advisory by default** - it's scored and surfaced, so a governance-compliant but

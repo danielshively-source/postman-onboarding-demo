@@ -195,6 +195,28 @@ Secondary to governance/discovery, and **off by default**. The `insights` job re
 > Do **not** enable against production-like traffic until FloQast security signs off on the
 > data-handling answers above. Start with a non-production service.
 
+### Agent + mock traffic (what the `insights` job does)
+
+The `insights` job runs the **real Postman Insights agent against generated mock traffic** -
+no customer data - to demonstrate runtime capture safely:
+
+1. Starts a local stand-in service (`scripts/insights_mock_service.py`) modeling the API.
+2. Installs `postman-insights-agent` and runs `apidump` capturing loopback HTTP.
+3. Drives ~90s of mock requests across the endpoints; the agent characterizes and uploads them.
+4. Runs `postman-insights-onboarding-action` to link the discovered service to the workspace.
+
+**One-time prerequisite (UI only).** The agent's `apidump --project` needs an Insights
+**project ID** (`svc_*`). There is **no API to create a project** - it is created once in the
+Postman UI: open the workspace settings, enable **Insights**, go to **Services -> Insights ->
+Create**, and choose the container environment (**ECS** for FloQast). Copy the `svc_*` ID into
+the repo variable `POSTMAN_INSIGHTS_PROJECT_ID`. Until that variable is set, the job logs the
+prerequisite and skips the agent (it does not fail).
+
+**Standalone vs. discovery.** `apidump --project` populates a specific Insights project with
+endpoints. The catalog **discovered-services** list that the onboarding action links from is
+normally produced by the agent running as an **ECS sidecar/daemon** (or k8s DaemonSet) in
+auto-discovery mode. The CI mock run proves capture; production linking uses the sidecar deploy.
+
 ---
 
 ## Job 6 - MCP / agent-readiness
