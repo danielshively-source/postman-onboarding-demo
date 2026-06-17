@@ -1,0 +1,155 @@
+openapi: 3.0.3
+info:
+  title: FloQast Close Tasks API
+  version: 1.0.0
+  description: >-
+    External-ready API for month-end close checklist tasks. This spec PASSES the
+    FloQast governance gate (no blockers) but is intentionally only partly
+    agent-ready: it omits response examples, leaves schema properties
+    undocumented, and does not document error responses on read endpoints. The
+    pipeline should let it through governance while flagging it as "needs-work"
+    on the agent-readiness scorecard.
+  contact:
+    name: Close Platform Team
+    email: close-platform@floqast.example
+  license:
+    name: Proprietary
+    url: https://floqast.example/legal/api-terms
+servers:
+  - url: https://api.floqast.example/v1
+    description: Production
+security:
+  - bearerAuth: []
+tags:
+  - name: CloseTasks
+    description: Create, retrieve, and list month-end close checklist tasks.
+paths:
+  /close-tasks:
+    get:
+      operationId: listCloseTasks
+      summary: List close tasks
+      description: Returns the close checklist tasks for an accounting period.
+      tags: [CloseTasks]
+      parameters:
+        - name: period
+          in: query
+          description: Accounting period in YYYY-MM format.
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: Filter by task status.
+          required: false
+          schema:
+            type: string
+            enum: [not_started, in_progress, complete]
+      responses:
+        '200':
+          description: A list of close tasks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseTaskList'
+    post:
+      operationId: createCloseTask
+      summary: Create a close task
+      description: Creates a new close checklist task.
+      tags: [CloseTasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseTaskRequest'
+      responses:
+        '201':
+          description: The created close task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseTask'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /close-tasks/{taskId}:
+    get:
+      operationId: getCloseTask
+      summary: Retrieve a close task
+      description: Retrieves a single close task by its identifier.
+      tags: [CloseTasks]
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          description: Unique identifier of the close task.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The requested close task.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseTask'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Service bearer token issued by the FloQast identity provider.
+  responses:
+    BadRequest:
+      description: The request was invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    CloseTask:
+      type: object
+      required: [id, name, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        period:
+          type: string
+        assignee_email:
+          type: string
+        status:
+          type: string
+          enum: [not_started, in_progress, complete]
+        due_date:
+          type: string
+          format: date
+    CloseTaskList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CloseTask'
+    CloseTaskRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        period:
+          type: string
+        assignee_email:
+          type: string
+        due_date:
+          type: string
+          format: date
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string

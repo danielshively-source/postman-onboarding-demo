@@ -16,10 +16,28 @@ Full write-up: **[docs/PIPELINE.md](docs/PIPELINE.md)**.
 | --- | --- |
 | `governance/floqast.spectral.yaml` | The "Stripe-level" governance ruleset (blocker vs flag) |
 | `scripts/agent_readiness.py` | 0-100 agent-readiness / UI-vs-agent scorer |
-| `openapi/core-payments-openapi.yaml` | Compliant reference spec (passes the gate, scores 100) |
+| `scripts/render_governance.py` | Renders the demo scorecard + inline PR annotations + the gate |
+| `openapi/*.yaml` | Sample external-ready specs (see catalog below) |
 | `examples/non-compliant/legacy-internal-api.yaml` | Fixture that fails the gate (15 blockers) - proves enforcement |
 | `.github/workflows/api-pipeline.yml` | Staged pipeline: governance -> onboard+catalog -> insights |
 | `docs/PIPELINE.md` | Maps the 6 jobs, 10-step flow, no-rewrite matrix, security checkpoint, MCP track |
+
+## Sample spec catalog
+
+A small batch standing in for FloQast's "first external-ready APIs," chosen to show the
+full range of the gate. Pick any of them on a manual run (**Actions -> FloQast API
+Pipeline -> Run workflow -> Spec**).
+
+| Spec | Domain | Governance gate | Agent-readiness |
+| --- | --- | --- | --- |
+| `openapi/reconciliations.yaml` | Account reconciliations | :white_check_mark: PASS | **100** - agent-ready |
+| `openapi/core-payments-openapi.yaml` | Payments (generic) | :white_check_mark: PASS | **100** - agent-ready |
+| `openapi/close-tasks.yaml` | Close checklist tasks | :white_check_mark: PASS | **70** - needs-work |
+| `examples/non-compliant/legacy-internal-api.yaml` | Legacy internal API | :x: FAIL (15 blockers) | **17.5** - ui-oriented |
+
+`close-tasks.yaml` is the instructive middle case: it **passes governance** yet is flagged
+**needs-work** for agents (no examples, undocumented schema properties, no documented errors
+on reads) - exactly the "compliant but not yet agent-ready" distinction Raaj asked about.
 
 ## The gate, the most important part
 
@@ -27,10 +45,10 @@ Full write-up: **[docs/PIPELINE.md](docs/PIPELINE.md)**.
 Nothing reaches Postman unless the spec passes (`onboard` `needs: governance`).
 
 ```bash
-# Compliant reference -> exit 0
-npx @stoplight/spectral-cli lint openapi/core-payments-openapi.yaml \
+# Agent-ready external spec -> exit 0
+npx @stoplight/spectral-cli lint openapi/reconciliations.yaml \
   --ruleset governance/floqast.spectral.yaml --fail-severity error
-python3 scripts/agent_readiness.py openapi/core-payments-openapi.yaml      # 100/100 agent-ready
+python3 scripts/agent_readiness.py openapi/reconciliations.yaml      # 100/100 agent-ready
 
 # Legacy internal API -> 15 blockers, exit 1
 npx @stoplight/spectral-cli lint examples/non-compliant/legacy-internal-api.yaml \

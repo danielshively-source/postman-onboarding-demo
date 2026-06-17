@@ -89,6 +89,19 @@ npx @stoplight/spectral-cli lint examples/non-compliant/legacy-internal-api.yaml
 
 ## Job 1 - Ingest the first external-ready API batch
 
+The sample batch (stand-ins for FloQast's first external-ready APIs):
+
+| Spec | Domain | Gate | Readiness |
+| --- | --- | --- | --- |
+| `openapi/reconciliations.yaml` | Account reconciliations | PASS | 100 (agent-ready) |
+| `openapi/core-payments-openapi.yaml` | Payments (generic reference) | PASS | 100 (agent-ready) |
+| `openapi/close-tasks.yaml` | Close checklist tasks | PASS | 70 (needs-work) |
+| `examples/non-compliant/legacy-internal-api.yaml` | Legacy internal API | FAIL | 17.5 (ui-oriented) |
+
+Run any of them on demand: **Actions -> FloQast API Pipeline -> Run workflow -> Spec**.
+`close-tasks.yaml` deliberately passes governance but scores "needs-work" to show that
+governance-compliant and agent-ready are distinct bars.
+
 - Specs live in `openapi/` (Swagger/OpenAPI). Add one file per service in the first batch.
 - The `onboard` job imports each spec into Postman Spec Hub, connects it to a workspace,
   and (via `postman-repo-sync-action`) connects it back to this GitHub repo/monorepo.

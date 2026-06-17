@@ -1,0 +1,248 @@
+openapi: 3.0.3
+info:
+  title: FloQast Reconciliations API
+  version: 1.0.0
+  description: >-
+    External-ready API for account reconciliations in the FloQast close platform.
+    A reconciliation ties a general-ledger balance to a supporting balance and
+    tracks its review/approval state. Authored to the FloQast "Stripe-level"
+    standard and to be fully agent-ready.
+  contact:
+    name: Close Platform Team
+    email: close-platform@floqast.example
+    url: https://floqast.example/teams/close-platform
+  license:
+    name: Proprietary
+    url: https://floqast.example/legal/api-terms
+servers:
+  - url: https://api.floqast.example/v1
+    description: Production
+security:
+  - bearerAuth: []
+tags:
+  - name: Reconciliations
+    description: Create, retrieve, and list account reconciliations.
+paths:
+  /reconciliations:
+    get:
+      operationId: listReconciliations
+      summary: List reconciliations
+      description: Returns a cursor-paginated list of reconciliations, most recently updated first.
+      tags: [Reconciliations]
+      parameters:
+        - name: status
+          in: query
+          description: Filter by review status.
+          required: false
+          schema:
+            type: string
+            enum: [open, in_review, approved, rejected]
+        - name: period
+          in: query
+          description: Accounting period in YYYY-MM format.
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Maximum number of reconciliations to return (1-100).
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+        - name: cursor
+          in: query
+          description: Opaque pagination cursor returned by a previous call.
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A page of reconciliations.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconciliationList'
+              example:
+                data:
+                  - id: rec_8f2a
+                    account_name: Cash - Operating
+                    period: '2026-05'
+                    gl_balance: 158230000
+                    supporting_balance: 158230000
+                    status: approved
+                    updated_at: '2026-06-02T18:04:00Z'
+                next_cursor: cur_eyJwIjoy
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: createReconciliation
+      summary: Create a reconciliation
+      description: Creates a new reconciliation for an account and period in the open state.
+      tags: [Reconciliations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconciliationRequest'
+            example:
+              account_name: Cash - Operating
+              period: '2026-05'
+              gl_balance: 158230000
+              supporting_balance: 158230000
+      responses:
+        '201':
+          description: The created reconciliation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reconciliation'
+              example:
+                id: rec_8f2a
+                account_name: Cash - Operating
+                period: '2026-05'
+                gl_balance: 158230000
+                supporting_balance: 158230000
+                status: open
+                updated_at: '2026-06-01T09:00:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /reconciliations/{reconciliationId}:
+    get:
+      operationId: getReconciliation
+      summary: Retrieve a reconciliation
+      description: Retrieves a single reconciliation by its identifier.
+      tags: [Reconciliations]
+      parameters:
+        - name: reconciliationId
+          in: path
+          required: true
+          description: Unique identifier of the reconciliation.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The requested reconciliation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reconciliation'
+              example:
+                id: rec_8f2a
+                account_name: Cash - Operating
+                period: '2026-05'
+                gl_balance: 158230000
+                supporting_balance: 158230000
+                status: in_review
+                updated_at: '2026-06-02T11:20:00Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Service bearer token issued by the FloQast identity provider.
+  responses:
+    BadRequest:
+      description: The request was invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: invalid_request
+            message: gl_balance must be an integer in minor units
+    Unauthorized:
+      description: Authentication failed or was not provided.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: unauthorized
+            message: Missing or invalid bearer token
+    NotFound:
+      description: No resource matched the identifier.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: not_found
+            message: No reconciliation matched the identifier
+  schemas:
+    Reconciliation:
+      type: object
+      required: [id, account_name, period, gl_balance, supporting_balance, status]
+      properties:
+        id:
+          type: string
+          description: Unique reconciliation identifier.
+        account_name:
+          type: string
+          description: Human-readable general-ledger account name.
+        period:
+          type: string
+          description: Accounting period in YYYY-MM format.
+        gl_balance:
+          type: integer
+          description: General-ledger balance in minor units (for example, cents).
+        supporting_balance:
+          type: integer
+          description: Supporting/subledger balance in minor units.
+        status:
+          type: string
+          description: Current review status of the reconciliation.
+          enum: [open, in_review, approved, rejected]
+        updated_at:
+          type: string
+          format: date-time
+          description: RFC 3339 timestamp of the last update.
+    ReconciliationList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          description: The page of reconciliation objects.
+          items:
+            $ref: '#/components/schemas/Reconciliation'
+        next_cursor:
+          type: string
+          nullable: true
+          description: Cursor for the next page, or null when there are no more results.
+    ReconciliationRequest:
+      type: object
+      required: [account_name, period, gl_balance, supporting_balance]
+      properties:
+        account_name:
+          type: string
+          description: General-ledger account name to reconcile.
+        period:
+          type: string
+          description: Accounting period in YYYY-MM format.
+        gl_balance:
+          type: integer
+          description: General-ledger balance in minor units.
+        supporting_balance:
+          type: integer
+          description: Supporting/subledger balance in minor units.
+    Error:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code.
+        message:
+          type: string
+          description: Human-readable error message.
