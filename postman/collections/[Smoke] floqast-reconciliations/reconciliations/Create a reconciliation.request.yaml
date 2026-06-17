@@ -1,0 +1,84 @@
+type: http
+name: Create a reconciliation
+url: '{{baseUrl}}/reconciliations'
+method: POST
+headers:
+  - key: Content-Type
+    value: application/json
+  - key: Accept
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "account_name": "Cash - Operating",
+      "period": "2026-05",
+      "gl_balance": 158230000,
+      "supporting_balance": 158230000
+    }
+scripts:
+  - type: afterResponse
+    code:
+      - // [Smoke] Auto-generated test assertions
+      - pm.test('Status code is successful (2xx)', function () {
+      - '    pm.response.to.be.success;'
+      - '});'
+      - pm.test('Response time is acceptable', function () {
+      - '    var threshold = parseInt(pm.environment.get(''RESPONSE_TIME_THRESHOLD'') || ''2000'', 10);'
+      - '    pm.expect(pm.response.responseTime).to.be.below(threshold);'
+      - '});'
+      - pm.test('Response body is not empty', function () {
+      - '    if (pm.response.code !== 204) {'
+      - '        var body = pm.response.text();'
+      - '        pm.expect(body.length).to.be.above(0);'
+      - '    }'
+      - '});'
+    language: text/javascript
+examples:
+  - response:
+      statusCode: 201
+      statusText: Created
+      body:
+        type: json
+        content: |-
+          {
+            "id": "rec_8f2a",
+            "account_name": "Cash - Operating",
+            "period": "2026-05",
+            "gl_balance": 158230000,
+            "supporting_balance": 158230000,
+            "status": "open",
+            "updated_at": "2026-06-01T09:00:00Z"
+          }
+      headers:
+        - key: Content-Type
+          value: application/json
+    name: The created reconciliation.
+  - response:
+      statusCode: 400
+      statusText: Bad Request
+      body:
+        type: json
+        content: |-
+          {
+            "code": "invalid_request",
+            "message": "gl_balance must be an integer in minor units"
+          }
+      headers:
+        - key: Content-Type
+          value: application/json
+    name: The request was invalid.
+  - response:
+      statusCode: 401
+      statusText: Unauthorized
+      body:
+        type: json
+        content: |-
+          {
+            "code": "unauthorized",
+            "message": "Missing or invalid bearer token"
+          }
+      headers:
+        - key: Content-Type
+          value: application/json
+    name: Authentication failed or was not provided.
