@@ -1,0 +1,30 @@
+type: http
+name: Retrieve a close task
+url: '{{baseUrl}}/close-tasks/:taskId'
+method: GET
+headers:
+  - key: Accept
+    value: application/json
+pathVariables:
+  - key: taskId
+    value: string
+    description: Unique identifier of the close task.
+examples:
+  - response:
+      statusCode: 200
+      statusText: OK
+      body:
+        type: json
+        content: |-
+          {
+            "id": "string",
+            "name": "string",
+            "status": "in_progress",
+            "period": "string",
+            "assignee_email": "string",
+            "due_date": "1994-04-29"
+          }
+      headers:
+        - key: Content-Type
+          value: application/json
+    name: The requested close task.

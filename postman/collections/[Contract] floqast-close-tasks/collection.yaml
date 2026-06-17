@@ -1,0 +1,22 @@
+$schema: https://schema.postman.com/json/draft-2020-12/collection/v3.0.0/
+type: collection
+name: '[Contract] floqast-close-tasks'
+description: |-
+  External-ready API for month-end close checklist tasks. This spec PASSES the FloQast governance gate (no blockers) but is intentionally only partly agent-ready: it omits response examples, leaves schema properties undocumented, and does not document error responses on read endpoints. The pipeline should let it through governance while flagging it as "needs-work" on the agent-readiness scorecard.
+
+  Contact Support:
+   Name: Close Platform Team
+   Email: close-platform@floqast.example
+id: 4dfbfc06-5f55-4a61-9324-740b0137905b
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{bearerToken}}'
+      type: string
+variables:
+  - key: baseUrl
+    value: https://api.floqast.example/v1
+items:
+  - ref: ./close-tasks/folder.yaml
+  - ref: ./00 - Resolve Secrets.request.yaml

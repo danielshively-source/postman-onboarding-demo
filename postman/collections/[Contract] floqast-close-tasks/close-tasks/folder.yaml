@@ -1,0 +1,6 @@
+type: folder
+name: close-tasks
+items:
+  - ref: ./{taskId}/folder.yaml
+  - ref: ./List close tasks.request.yaml
+  - ref: ./Create a close task.request.yaml
