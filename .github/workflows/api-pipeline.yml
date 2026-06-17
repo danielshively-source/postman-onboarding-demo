@@ -36,8 +36,6 @@ permissions:
 env:
   SPEC_PATH: openapi/core-payments-openapi.yaml
   PROJECT_NAME: core-payments
-  # Clean demo logs: opt JS actions into Node 24 so no deprecation warnings appear.
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -87,7 +85,7 @@ jobs:
 
       - name: Upload governance artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: governance-report
           path: |
