@@ -141,6 +141,16 @@ jobs:
           collection-sync-mode: refresh
           spec-sync-mode: update
           environments-json: '["prod"]'
+          # CI monitoring: schedule the cloud smoke monitor (default every 6h).
+          monitor-cron: ${{ vars.POSTMAN_MONITOR_CRON || '0 */6 * * *' }}
+          # System environments: associate Postman envs to team system environments
+          # when a map of {env-slug: system-env-id} is provided. Needs team-defined
+          # system environment IDs (see docs/PIPELINE.md, Job 3).
+          environment-sync-enabled: true
+          system-env-map-json: ${{ vars.POSTMAN_SYSTEM_ENV_MAP || '{}' }}
+          # Generated CI workflow is left off: pushing files under .github/workflows
+          # needs a PAT with `workflow` scope (GITHUB_TOKEN is refused). Provide
+          # gh-fallback-token + set this true to also drop a Postman CLI ci.yml.
           generate-ci-workflow: false
           repo-write-mode: commit-and-push
           # Insights is handled in its own gated job below, not here.
