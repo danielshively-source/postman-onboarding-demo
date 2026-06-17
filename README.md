@@ -1,46 +1,71 @@
-# postman-onboarding-demo
+# FloQast API Pipeline (CSE proof)
 
-An **idempotent** GitHub Actions pipeline that runs the full
-[Postman API Onboarding](https://github.com/postman-cs/postman-api-onboarding-action)
-suite on every push to `main`.
+A runnable CSE pipeline that proves Postman can take FloQast's **first external-ready
+APIs** and turn them into **governed, discoverable, CI-enforced, agent-ready** Postman
+assets - without forcing a rewrite of their existing GitHub, monorepo, and test setup.
 
-## What the pipeline does
+> The governance gate runs **today with no Postman credentials**. The live-Postman
+> stages (workspace import, catalog publish, runtime insights) switch on with one repo
+> variable once a valid Postman key is configured.
 
-The workflow at [`.github/workflows/postman-onboarding.yml`](.github/workflows/postman-onboarding.yml)
-chains the Postman onboarding actions via the composite entrypoint:
+Full write-up: **[docs/PIPELINE.md](docs/PIPELINE.md)**.
 
-1. **Resolve service token** (`postman-resolve-service-token-action`) — mints a fresh
-   service-account access token and resolves the team ID from the `POSTMAN_API_KEY`.
-2. **Bootstrap** (`postman-bootstrap-action`) — creates/reuses the workspace, uploads
-   `openapi/core-payments-openapi.yaml` to Spec Hub, and generates the baseline, smoke,
-   and contract collections.
-3. **Repo sync** (`postman-repo-sync-action`) — exports collection/environment artifacts
-   into this repo, registers a mock server and smoke monitor, and persists asset IDs.
-4. **Smoke + contract tests** — runs the generated collections with the Postman CLI and
-   uploads JUnit results as a workflow artifact.
-5. **Insights linking** (`postman-insights-onboarding-action`) — links discovered services
-   to the workspace (`enable-insights: true`).
+## What's here
 
-## Why it's idempotent
-
-- The onboarding action **creates or reuses** the workspace, spec, and collections, so
-  re-runs update in place instead of duplicating assets.
-- `collection-sync-mode: refresh` and `spec-sync-mode: update` update tracked assets
-  rather than minting new versions.
-- `repo-write-mode: commit-and-push` persists resolved asset IDs (`.postman/resources.yaml`)
-  back to the repo so later runs reuse them.
-- `concurrency` serializes runs on `main` so two pushes never race to provision the same assets.
-- Commits pushed back by the action use `GITHUB_TOKEN`, which **does not** re-trigger the
-  workflow (GitHub blocks recursive `GITHUB_TOKEN` triggers). `paths-ignore` is a second guard.
-
-## Required secrets
-
-| Secret | Purpose |
+| Path | Purpose |
 | --- | --- |
-| `POSTMAN_API_KEY` | Service-account Postman API key (`PMAK-*`). Bootstraps all assets and mints the access token. |
-| `POSTMAN_ACCESS_TOKEN` | Pre-supplied access token. Not used by default (the pipeline mints one); available as an alternative — see the comment in the workflow. |
+| `governance/floqast.spectral.yaml` | The "Stripe-level" governance ruleset (blocker vs flag) |
+| `scripts/agent_readiness.py` | 0-100 agent-readiness / UI-vs-agent scorer |
+| `openapi/core-payments-openapi.yaml` | Compliant reference spec (passes the gate, scores 100) |
+| `examples/non-compliant/legacy-internal-api.yaml` | Fixture that fails the gate (15 blockers) - proves enforcement |
+| `.github/workflows/api-pipeline.yml` | Staged pipeline: governance -> onboard+catalog -> insights |
+| `docs/PIPELINE.md` | Maps the 6 jobs, 10-step flow, no-rewrite matrix, security checkpoint, MCP track |
 
-## Trigger
+## The gate, the most important part
 
-Push to `main` (or run manually via **workflow_dispatch**). Replace
-`openapi/core-payments-openapi.yaml` with your own OpenAPI document to onboard a real service.
+`error` = **blocker** (fails CI, not ready to publish). `warn` = **flag** (surfaced, non-blocking).
+Nothing reaches Postman unless the spec passes (`onboard` `needs: governance`).
+
+```bash
+# Compliant reference -> exit 0
+npx @stoplight/spectral-cli lint openapi/core-payments-openapi.yaml \
+  --ruleset governance/floqast.spectral.yaml --fail-severity error
+python3 scripts/agent_readiness.py openapi/core-payments-openapi.yaml      # 100/100 agent-ready
+
+# Legacy internal API -> 15 blockers, exit 1
+npx @stoplight/spectral-cli lint examples/non-compliant/legacy-internal-api.yaml \
+  --ruleset governance/floqast.spectral.yaml --fail-severity error
+python3 scripts/agent_readiness.py examples/non-compliant/legacy-internal-api.yaml  # 17.5/100 ui-oriented
+```
+
+## Pipeline stages
+
+```
+push to main / PR / dispatch
+        |
+        v
+[ governance ]  Spectral Stripe-level lint + agent-readiness score   (ALWAYS, BLOCKING)
+        |  needs: governance, if POSTMAN_LIVE == true
+        v
+[ onboard ]     import spec -> workspace/collections -> repo sync -> catalog foundation
+        |  needs: onboard, if INSIGHTS_SECURITY_APPROVED == true
+        v
+[ insights ]    runtime observability (only after security sign-off)
+```
+
+## Trigger & idempotency
+
+- Triggers on **push to `main`**, **pull requests**, and **workflow_dispatch**.
+- Idempotent: create-or-reuse Postman assets, `refresh`/`update` sync modes, serialized
+  `concurrency`, and `GITHUB_TOKEN` pushes that don't recursively re-trigger the workflow.
+
+## Secrets & variables
+
+| Name | Type | Purpose |
+| --- | --- | --- |
+| `POSTMAN_API_KEY` | secret | Service-account PMAK. Required for live stages. |
+| `POSTMAN_ACCESS_TOKEN` | secret | Optional pre-supplied access token (alternative to minting). |
+| `POSTMAN_LIVE` | variable | `true` enables the `onboard` job. |
+| `INSIGHTS_SECURITY_APPROVED` | variable | `true` (after sign-off) enables the `insights` job. |
+
+See [docs/PIPELINE.md](docs/PIPELINE.md#turning-on-the-live-postman-stages) to go live.

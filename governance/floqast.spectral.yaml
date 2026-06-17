@@ -1,0 +1,185 @@
+# FloQast "Stripe-level" API governance ruleset.
+#
+# This is the quality gate that decides whether an API is allowed to become an
+# external, agent-ready Postman asset. It extends Spectral's built-in OpenAPI
+# rules and layers FloQast-specific standards on top.
+#
+# Severity contract used by the CI gate:
+#   error   -> BLOCKER. Fails the pipeline. The API is NOT ready to publish.
+#   warn    -> FLAG. Surfaced in the report and PR annotations, does not block.
+#
+# Mirror these same rules into Postman's design-time API Governance so authors
+# get identical feedback in the Postman app and in CI.
+
+extends:
+  - spectral:oas
+
+rules:
+  # ----------------------------------------------------------------------------
+  # API metadata: every catalog entry needs an owner, description, and license.
+  # ----------------------------------------------------------------------------
+  info-contact: error
+  info-description: error
+  info-license: warn
+
+  floqast-info-contact-owner:
+    description: "info.contact must name an owning team/email so the catalog has an accountable owner."
+    given: $.info.contact
+    severity: error
+    then:
+      - field: name
+        function: truthy
+      - field: email
+        function: truthy
+
+  floqast-info-version-semver:
+    description: "info.version must be semantic (e.g. 1.0.0) to support versioned catalog publishing."
+    given: $.info.version
+    severity: warn
+    then:
+      function: pattern
+      functionOptions:
+        match: "^\\d+\\.\\d+\\.\\d+$"
+
+  # ----------------------------------------------------------------------------
+  # Operations: discoverable, self-describing, and uniquely addressable.
+  # ----------------------------------------------------------------------------
+  operation-operationId: error
+  operation-operationId-unique: error
+  operation-description: error
+  operation-tags: error
+  operation-tag-defined: error
+  operation-success-response: error
+
+  floqast-operation-summary:
+    description: "Every operation must have a human-readable summary for docs and agent tool descriptions."
+    given: "$.paths[*][get,put,post,patch,delete,options,head,trace]"
+    severity: error
+    then:
+      field: summary
+      function: truthy
+
+  floqast-operationid-camelcase:
+    description: "operationId must be camelCase so generated SDKs and MCP tool names are stable."
+    given: "$.paths[*][get,put,post,patch,delete,options,head,trace].operationId"
+    severity: warn
+    then:
+      function: casing
+      functionOptions:
+        type: camel
+
+  # ----------------------------------------------------------------------------
+  # Tags: power catalog navigation and grouping, so they must be described.
+  # ----------------------------------------------------------------------------
+  floqast-tag-description:
+    description: "Every tag must have a description (drives catalog grouping and discovery)."
+    given: $.tags[*]
+    severity: error
+    then:
+      field: description
+      function: truthy
+
+  # ----------------------------------------------------------------------------
+  # Parameters & responses: typed, documented, and agent-parseable.
+  # ----------------------------------------------------------------------------
+  floqast-parameter-description:
+    description: "Every parameter must be documented."
+    given:
+      - "$.paths[*][get,put,post,patch,delete,options,head,trace].parameters[*]"
+      - "$.paths[*].parameters[*]"
+    severity: error
+    then:
+      field: description
+      function: truthy
+
+  floqast-success-response-schema:
+    description: "2xx responses must define an application/json schema (no untyped success bodies)."
+    given: $.paths[*][get,put,post,patch,delete].responses[?(@property >= '200' && @property < '300')]
+    severity: error
+    then:
+      field: content.application/json.schema
+      function: truthy
+
+  floqast-error-response-schema:
+    description: "4xx and 5xx responses must define a JSON error schema so clients and agents can handle failures."
+    given: $.paths[*][get,put,post,patch,delete].responses[?(@property.match(/^(4|5)\d\d$/))]
+    severity: error
+    then:
+      field: content.application/json.schema
+      function: truthy
+
+  floqast-mutations-define-4xx:
+    description: "Write operations (POST/PUT/PATCH/DELETE) must document at least one 4xx error response."
+    given: $.paths[*][post,put,patch,delete].responses
+    severity: warn
+    then:
+      field: "400"
+      function: truthy
+
+  # ----------------------------------------------------------------------------
+  # Security: nothing goes external without an auth scheme.
+  # ----------------------------------------------------------------------------
+  floqast-security-scheme-defined:
+    description: "API must declare at least one security scheme under components.securitySchemes."
+    given: $
+    severity: error
+    then:
+      field: components.securitySchemes
+      function: truthy
+
+  floqast-global-security-applied:
+    description: "A top-level security requirement must be applied (or overridden per-operation)."
+    given: $
+    severity: error
+    then:
+      field: security
+      function: truthy
+
+  # ----------------------------------------------------------------------------
+  # Transport & naming: HTTPS, versioned, snake_case (Stripe-style) properties.
+  # ----------------------------------------------------------------------------
+  floqast-https-only:
+    description: "Server URLs must use HTTPS."
+    given: $.servers[*].url
+    severity: error
+    then:
+      function: pattern
+      functionOptions:
+        match: "^https://"
+
+  floqast-versioned-server:
+    description: "Server URL should carry an explicit major version segment (e.g. /v1)."
+    given: $.servers[*].url
+    severity: warn
+    then:
+      function: pattern
+      functionOptions:
+        match: "/v\\d+"
+
+  floqast-snake-case-properties:
+    description: "Schema property names must be snake_case (Stripe-style) for consistent external contracts."
+    given: $.components.schemas[*].properties.*~
+    severity: warn
+    then:
+      function: casing
+      functionOptions:
+        type: snake
+
+  # ----------------------------------------------------------------------------
+  # Agent-readiness: rich descriptions and examples so agents need less context.
+  # ----------------------------------------------------------------------------
+  floqast-schema-property-description:
+    description: "Schema properties should be documented so agents can use them without the full spec."
+    given: $.components.schemas[*].properties[*]
+    severity: warn
+    then:
+      field: description
+      function: truthy
+
+  floqast-response-examples:
+    description: "Success responses should include an example to ground agent and mock behavior."
+    given: $.paths[*][get,post,put,patch].responses[?(@property >= '200' && @property < '300')].content.application/json
+    severity: warn
+    then:
+      field: example
+      function: truthy

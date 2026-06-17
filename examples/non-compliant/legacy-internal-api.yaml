@@ -1,0 +1,40 @@
+openapi: 3.0.3
+info:
+  title: Legacy Internal API
+  version: "0.3"
+# Intentionally non-compliant fixture: a typical internal, UI-backed API that has
+# NOT been hardened for external/agent use. Run the governance gate against this
+# file to demonstrate blocker detection:
+#
+#   npx @stoplight/spectral-cli lint examples/non-compliant/legacy-internal-api.yaml \
+#     --ruleset governance/floqast.spectral.yaml --fail-severity error
+#
+# Expected: multiple BLOCKER (error) findings -> not ready to publish.
+servers:
+  - url: http://internal.svc.local/api
+paths:
+  /getUserData:
+    post:
+      responses:
+        '200':
+          description: ok
+  /users/{id}:
+    get:
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: a user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  UserName:
+                    type: string
+                  emailAddress:
+                    type: string

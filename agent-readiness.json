@@ -1,0 +1,47 @@
+{
+  "spec": "openapi/core-payments-openapi.yaml",
+  "score": 100.0,
+  "verdict": "agent-ready",
+  "criteria": [
+    {
+      "name": "Unique operationId on every operation",
+      "weight": 15,
+      "coverage": 1.0
+    },
+    {
+      "name": "Summary + description on every operation",
+      "weight": 15,
+      "coverage": 1.0
+    },
+    {
+      "name": "Every parameter documented",
+      "weight": 10,
+      "coverage": 1.0
+    },
+    {
+      "name": "Typed 2xx response schema",
+      "weight": 15,
+      "coverage": 1.0
+    },
+    {
+      "name": "Documented 4xx/5xx error responses",
+      "weight": 15,
+      "coverage": 1.0
+    },
+    {
+      "name": "Security applied to every operation",
+      "weight": 10,
+      "coverage": 1.0
+    },
+    {
+      "name": "Examples on success responses",
+      "weight": 10,
+      "coverage": 1.0
+    },
+    {
+      "name": "Schema properties documented",
+      "weight": 10,
+      "coverage": 1.0
+    }
+  ]
+}

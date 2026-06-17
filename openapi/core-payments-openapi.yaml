@@ -3,22 +3,38 @@ info:
   title: Core Payments API
   version: 1.0.0
   description: >-
-    Example OpenAPI definition used by the Postman API onboarding actions to
-    demonstrate spec upload, collection generation, and workspace provisioning.
-    Replace it with your own service's OpenAPI document.
+    Reference external-ready API for the FloQast onboarding pipeline. It models a
+    small, Stripe-style payments service and is authored to pass the FloQast
+    "Stripe-level" governance ruleset and score well on agent-readiness. Replace
+    it with a real FloQast service's OpenAPI document to onboard that service.
+  contact:
+    name: Payments Platform Team
+    email: payments-platform@floqast.example
+    url: https://floqast.example/teams/payments-platform
+  license:
+    name: Proprietary
+    url: https://floqast.example/legal/api-terms
 servers:
   - url: https://api.example.com/v1
     description: Production
+security:
+  - bearerAuth: []
+tags:
+  - name: Payments
+    description: Create, retrieve, and list payment objects.
 paths:
   /payments:
     get:
       operationId: listPayments
       summary: List payments
+      description: >-
+        Returns a cursor-paginated list of payments, most recent first. Use the
+        returned next_cursor to page forward.
       tags: [Payments]
       parameters:
         - name: limit
           in: query
-          description: Maximum number of payments to return.
+          description: Maximum number of payments to return (1-100).
           required: false
           schema:
             type: integer
@@ -32,24 +48,35 @@ paths:
           schema:
             type: string
             enum: [pending, settled, failed]
+        - name: cursor
+          in: query
+          description: Opaque pagination cursor returned by a previous call.
+          required: false
+          schema:
+            type: string
       responses:
         '200':
           description: A page of payments.
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Payment'
-                  next_cursor:
-                    type: string
-                    nullable: true
+                $ref: '#/components/schemas/PaymentList'
+              example:
+                data:
+                  - id: pay_3Mtw...
+                    amount: 1999
+                    currency: USD
+                    status: settled
+                    created_at: '2026-06-16T12:00:00Z'
+                next_cursor: cus_eyJ...
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     post:
       operationId: createPayment
       summary: Create a payment
+      description: Creates a new payment in the pending state.
       tags: [Payments]
       requestBody:
         required: true
@@ -57,6 +84,10 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/PaymentRequest'
+            example:
+              amount: 1999
+              currency: USD
+              description: Invoice 1043
       responses:
         '201':
           description: The created payment.
@@ -64,16 +95,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payment'
+              example:
+                id: pay_3Mtw...
+                amount: 1999
+                currency: USD
+                status: pending
+                created_at: '2026-06-16T12:00:00Z'
         '400':
-          description: The request was invalid.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /payments/{paymentId}:
     get:
       operationId: getPayment
       summary: Retrieve a payment
+      description: Retrieves the details of an existing payment by its identifier.
       tags: [Payments]
       parameters:
         - name: paymentId
@@ -89,13 +125,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payment'
+              example:
+                id: pay_3Mtw...
+                amount: 1999
+                currency: USD
+                status: settled
+                created_at: '2026-06-16T12:00:00Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: No payment matched the identifier.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
+          $ref: '#/components/responses/NotFound'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Service bearer token issued by the FloQast identity provider.
+  responses:
+    BadRequest:
+      description: The request was invalid.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: invalid_request
+            message: amount must be a positive integer
+    Unauthorized:
+      description: Authentication failed or was not provided.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: unauthorized
+            message: Missing or invalid bearer token
+    NotFound:
+      description: No resource matched the identifier.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            code: not_found
+            message: No payment matched the identifier
   schemas:
     Payment:
       type: object
@@ -113,10 +187,25 @@ components:
           example: USD
         status:
           type: string
+          description: Lifecycle status of the payment.
           enum: [pending, settled, failed]
         created_at:
           type: string
           format: date-time
+          description: RFC 3339 timestamp of when the payment was created.
+    PaymentList:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          description: The page of payment objects.
+          items:
+            $ref: '#/components/schemas/Payment'
+        next_cursor:
+          type: string
+          nullable: true
+          description: Cursor for the next page, or null when there are no more results.
     PaymentRequest:
       type: object
       required: [amount, currency]
@@ -124,16 +213,21 @@ components:
         amount:
           type: integer
           minimum: 1
+          description: Amount in the smallest currency unit (for example, cents).
         currency:
           type: string
+          description: ISO 4217 currency code.
           example: USD
         description:
           type: string
+          description: Optional free-form description for the payment.
     Error:
       type: object
       required: [code, message]
       properties:
         code:
           type: string
+          description: Machine-readable error code.
         message:
           type: string
+          description: Human-readable error message.

@@ -1,0 +1,166 @@
+name: FloQast API Pipeline
+
+# Turns an external-ready OpenAPI spec into a governed, discoverable, agent-ready
+# Postman asset. Stages map to the FloQast CSE pipeline jobs:
+#
+#   governance  -> Job 2: governance + linting quality gate (BLOCKING, always runs)
+#   onboard     -> Jobs 1 & 3 & 4: import spec, sync workspace/collections/repo,
+#                  publish to the discoverable catalog (gated on live Postman creds)
+#   insights    -> Job 5: runtime observability (gated behind an explicit security sign-off)
+#
+# Governance is the hard gate: nothing reaches Postman unless the spec passes the
+# "Stripe-level" ruleset. The live-Postman stages are gated on the POSTMAN_LIVE repo
+# variable so the governance value is demonstrable before credentials are wired.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'postman/**'
+      - '.postman/**'
+      - '.github/workflows/ci.yml'
+      - '**/*.md'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: floqast-api-pipeline-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write
+  pull-requests: write
+
+env:
+  SPEC_PATH: openapi/core-payments-openapi.yaml
+  PROJECT_NAME: core-payments
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # JOB 2 (+6 scoring): Governance + linting quality gate. Always runs, blocking.
+  # No Postman credentials required, so this proves value on day one.
+  # ---------------------------------------------------------------------------
+  governance:
+    name: Governance gate
+    runs-on: ubuntu-latest
+    outputs:
+      readiness-score: ${{ steps.readiness.outputs.score }}
+      readiness-verdict: ${{ steps.readiness.outputs.verdict }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Spectral governance lint (Stripe-level rules)
+        id: lint
+        run: |
+          # Human-readable findings in the job log.
+          npx --yes @stoplight/spectral-cli@6 lint "$SPEC_PATH" \
+            --ruleset governance/floqast.spectral.yaml \
+            --format pretty || true
+          # PR annotations (does not fail here).
+          npx --yes @stoplight/spectral-cli@6 lint "$SPEC_PATH" \
+            --ruleset governance/floqast.spectral.yaml \
+            --format github-actions --fail-severity error || true
+          # Authoritative gate: fail the build on any blocker (error-severity finding).
+          {
+            echo "## Governance gate: \`$SPEC_PATH\`"
+            echo '```'
+            npx --yes @stoplight/spectral-cli@6 lint "$SPEC_PATH" \
+              --ruleset governance/floqast.spectral.yaml --format pretty 2>&1 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          npx --yes @stoplight/spectral-cli@6 lint "$SPEC_PATH" \
+            --ruleset governance/floqast.spectral.yaml \
+            --fail-severity error
+
+      - name: Agent-readiness score
+        id: readiness
+        if: always()
+        run: |
+          python3 scripts/agent_readiness.py "$SPEC_PATH" --min-score 80
+
+      - name: Upload governance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: governance-report
+          path: agent-readiness.json
+          if-no-files-found: ignore
+
+  # ---------------------------------------------------------------------------
+  # JOBS 1, 3, 4: Import spec -> workspace/collections/repo sync -> catalog publish.
+  # Runs only on main, only when POSTMAN_LIVE=true, and only after governance passes.
+  # ---------------------------------------------------------------------------
+  onboard:
+    name: Onboard to Postman + publish to catalog
+    runs-on: ubuntu-latest
+    needs: governance
+    if: github.event_name != 'pull_request' && vars.POSTMAN_LIVE == 'true'
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: postman-token
+        name: Resolve Postman service token
+        uses: postman-cs/postman-resolve-service-token-action@v1
+        with:
+          postman-api-key: ${{ secrets.POSTMAN_API_KEY }}
+          postman-region: us
+
+      - id: onboard
+        name: Bootstrap, sync, and link workspace (catalog foundation)
+        uses: postman-cs/postman-api-onboarding-action@v1
+        with:
+          project-name: ${{ env.PROJECT_NAME }}
+          spec-path: ${{ env.SPEC_PATH }}
+          postman-region: us
+          # Idempotency: reuse + update in place rather than versioning duplicates.
+          collection-sync-mode: refresh
+          spec-sync-mode: update
+          environments-json: '["prod"]'
+          generate-ci-workflow: false
+          repo-write-mode: commit-and-push
+          # Insights is handled in its own gated job below, not here.
+          enable-insights: false
+          postman-api-key: ${{ secrets.POSTMAN_API_KEY }}
+          postman-access-token: ${{ steps.postman-token.outputs.token }}
+          postman-team-id: ${{ steps.postman-token.outputs.team-id }}
+          github-token: ${{ github.token }}
+
+      - name: Onboarding summary
+        if: always()
+        run: |
+          {
+            echo "## Postman onboarding"
+            echo ""
+            echo "| Phase | Outcome |"
+            echo "| --- | --- |"
+            echo "| Bootstrap | ${{ steps.onboard.outputs.bootstrap-outcome }} |"
+            echo "| Repo sync | ${{ steps.onboard.outputs.repo-sync-outcome }} |"
+            echo ""
+            echo "**Workspace:** ${{ steps.onboard.outputs.workspace-url }}"
+            echo "**Spec ID:** ${{ steps.onboard.outputs.spec-id }}"
+            echo "**Mock URL:** ${{ steps.onboard.outputs.mock-url }}"
+            echo ""
+            echo "_Publish the linked workspace/collection to the Private API Network"
+            echo "to complete catalog discovery. See docs/PIPELINE.md (Job 3)._"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # JOB 5: Runtime observability (Insights). DOUBLE-GATED:
+  #   - POSTMAN_LIVE=true (live Postman), AND
+  #   - INSIGHTS_SECURITY_APPROVED=true (explicit security/privacy sign-off).
+  # See docs/PIPELINE.md (Job 5) for the data-handling checkpoint that must be
+  # completed before this is enabled against any production-like traffic.
+  # ---------------------------------------------------------------------------
+  insights:
+    name: Runtime insights (security-gated)
+    runs-on: ubuntu-latest
+    needs: onboard
+    if: vars.POSTMAN_LIVE == 'true' && vars.INSIGHTS_SECURITY_APPROVED == 'true'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Insights linking
+        run: |
+          echo "::notice::Insights runtime track is enabled. Wire postman-insights-onboarding-action@v1 here."
+          echo "See docs/PIPELINE.md (Job 5) for the ECS deployment model and the data-protection checklist."
