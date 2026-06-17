@@ -36,6 +36,8 @@ permissions:
 env:
   SPEC_PATH: openapi/core-payments-openapi.yaml
   PROJECT_NAME: core-payments
+  # Clean demo logs: opt JS actions into Node 24 so no deprecation warnings appear.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -51,28 +53,31 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Print pipeline banner
+        run: |
+          echo "::group::FloQast API Pipeline"
+          cat <<'BANNER'
+          ============================================================
+            FloQast API Pipeline
+            internal, UI-backed  ->  external, governed, agent-ready
+          ------------------------------------------------------------
+            Stage 1/3  Governance gate        (Stripe-level, BLOCKING)
+            Stage 2/3  Onboard + catalog      (gated: POSTMAN_LIVE)
+            Stage 3/3  Runtime insights        (gated: security sign-off)
+          ============================================================
+          BANNER
+          echo "Candidate API: $SPEC_PATH"
+          echo "::endgroup::"
+
       - name: Spectral governance lint (Stripe-level rules)
         id: lint
         run: |
-          # Human-readable findings in the job log.
+          # Capture machine-readable findings; the renderer owns presentation + the gate.
           npx --yes @stoplight/spectral-cli@6 lint "$SPEC_PATH" \
             --ruleset governance/floqast.spectral.yaml \
-            --format pretty || true
-          # PR annotations (does not fail here).
-          npx --yes @stoplight/spectral-cli@6 lint "$SPEC_PATH" \
-            --ruleset governance/floqast.spectral.yaml \
-            --format github-actions --fail-severity error || true
-          # Authoritative gate: fail the build on any blocker (error-severity finding).
-          {
-            echo "## Governance gate: \`$SPEC_PATH\`"
-            echo '```'
-            npx --yes @stoplight/spectral-cli@6 lint "$SPEC_PATH" \
-              --ruleset governance/floqast.spectral.yaml --format pretty 2>&1 || true
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          npx --yes @stoplight/spectral-cli@6 lint "$SPEC_PATH" \
-            --ruleset governance/floqast.spectral.yaml \
-            --fail-severity error
+            --format json --output spectral.json --fail-severity error || true
+          # Renders the scorecard, inline annotations, and fails on any blocker.
+          python3 scripts/render_governance.py spectral.json "$SPEC_PATH"
 
       - name: Agent-readiness score
         id: readiness
@@ -85,7 +90,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: governance-report
-          path: agent-readiness.json
+          path: |
+            spectral.json
+            agent-readiness.json
           if-no-files-found: ignore
 
   # ---------------------------------------------------------------------------
@@ -164,3 +171,50 @@ jobs:
         run: |
           echo "::notice::Insights runtime track is enabled. Wire postman-insights-onboarding-action@v1 here."
           echo "See docs/PIPELINE.md (Job 5) for the ECS deployment model and the data-protection checklist."
+
+  # ---------------------------------------------------------------------------
+  # Always-on pipeline map: tells the whole FloQast story in the run summary,
+  # including which gated stages ran or were intentionally skipped (and why).
+  # ---------------------------------------------------------------------------
+  summary:
+    name: Pipeline summary
+    runs-on: ubuntu-latest
+    needs: [governance, onboard, insights]
+    if: always()
+    steps:
+      - name: Render pipeline map
+        env:
+          GOV: ${{ needs.governance.result }}
+          ONB: ${{ needs.onboard.result }}
+          INS: ${{ needs.insights.result }}
+          SCORE: ${{ needs.governance.outputs.readiness-score }}
+          VERDICT: ${{ needs.governance.outputs.readiness-verdict }}
+        run: |
+          icon() {
+            case "$1" in
+              success)  echo ":white_check_mark: passed" ;;
+              failure)  echo ":x: failed" ;;
+              skipped)  echo ":fast_forward: skipped" ;;
+              cancelled) echo ":no_entry: cancelled" ;;
+              *)        echo ":grey_question: $1" ;;
+            esac
+          }
+          {
+            echo "# FloQast API Pipeline - run summary"
+            echo ""
+            echo "From internal, UI-backed APIs to external, governed, agent-ready Postman assets."
+            echo ""
+            echo "| Stage | FloQast job | Result | Notes |"
+            echo "| :-- | :-- | :-- | :-- |"
+            echo "| 1. Governance gate | Job 2 (governance + linting) | $(icon "$GOV") | Stripe-level ruleset, blocking |"
+            echo "| - Agent-readiness | Job 6 (MCP / agent-ready) | ${SCORE:-n/a}/100 ${VERDICT:+($VERDICT)} | UI-oriented vs agent-ready score |"
+            echo "| 2. Onboard + catalog | Jobs 1, 3, 4 (import/sync/publish) | $(icon "$ONB") | Gated on \`POSTMAN_LIVE\` |"
+            echo "| 3. Runtime insights | Job 5 (observability) | $(icon "$INS") | Gated on \`INSIGHTS_SECURITY_APPROVED\` |"
+            echo ""
+            if [ "$ONB" = "skipped" ]; then
+              echo "> :information_source: The live-Postman stages are intentionally gated off."
+              echo "> Set repo variable \`POSTMAN_LIVE=true\` (with a valid \`POSTMAN_API_KEY\`) to run import, sync, and catalog publish."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Fail the run only if governance failed; gated skips are expected.
+          [ "$GOV" = "success" ] || exit 1

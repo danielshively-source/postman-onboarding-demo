@@ -5,3 +5,5 @@ agent-readiness.json
 node_modules/
 .postman/cli/
 *.log
+
+spectral.json

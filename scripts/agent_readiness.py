@@ -131,12 +131,18 @@ def score_spec(doc: dict):
     return total, criteria, n
 
 
-def verdict(score: float) -> str:
+def verdict(score: float):
+    """Return (label, emoji, shields-color) for a score."""
     if score >= 85:
-        return "agent-ready"
+        return "agent-ready", ":green_circle:", "brightgreen"
     if score >= 60:
-        return "needs-work"
-    return "ui-oriented"
+        return "needs-work", ":large_yellow_circle:", "yellow"
+    return "ui-oriented", ":red_circle:", "red"
+
+
+def bar(cov: float, width: int = 10) -> str:
+    filled = round(cov * width)
+    return "\u2588" * filled + "\u2591" * (width - filled)
 
 
 def main() -> int:
@@ -148,23 +154,37 @@ def main() -> int:
 
     doc = load(args.spec)
     score, criteria, n = score_spec(doc)
-    v = verdict(score)
+    v, emoji, color = verdict(score)
 
+    # Job-log view (grouped, with a big score bar).
+    print("::group::Agent-readiness scorecard")
+    print(f"  {bar(score / 100, 20)}  {score}/100  ->  {v}")
+    for name, weight, cov in criteria:
+        print(f"  {bar(cov)}  {round(cov*100):3d}%  {name}")
+    print("::endgroup::")
+
+    badge_score = str(score).replace(".", "%2E")
     lines = [
-        f"## Agent-readiness: {score}/100 ({v})",
+        "# Agent-Readiness Scorecard",
         "",
-        f"Spec: `{args.spec}` - {n} operation(s)",
+        f"![readiness](https://img.shields.io/badge/agent--readiness-{badge_score}%2F100-{color}?style=for-the-badge&logo=robotframework)",
+        "",
+        f"- **Spec:** `{args.spec}` &middot; {n} operation(s)",
+        f"- **Verdict:** {emoji} **{v}** ({score}/100)",
         "",
         "| Criterion | Weight | Coverage | Points |",
-        "| --- | ---: | ---: | ---: |",
+        "| :-- | --: | :-- | --: |",
     ]
     for name, weight, cov in criteria:
-        lines.append(f"| {name} | {weight} | {round(cov * 100)}% | {round(weight * cov, 1)} |")
+        lines.append(
+            f"| {name} | {weight} | `{bar(cov)}` {round(cov*100)}% | {round(weight * cov, 1)} |"
+        )
+    lines += [
+        "",
+        "> Agents act best when every operation is uniquely addressable, self-describing, "
+        "typed, secured, and exemplified - so they can act from the spec without loading it whole.",
+    ]
     report = "\n".join(lines)
-
-    print(report)
-    print()
-    print(f"Verdict: {v} (score {score}/100)")
 
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
