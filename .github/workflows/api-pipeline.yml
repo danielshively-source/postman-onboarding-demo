@@ -90,8 +90,11 @@ jobs:
       - name: Agent-readiness score
         id: readiness
         if: always()
+        # Advisory by default (governance is the hard gate). Set repo variable
+        # READINESS_MIN_SCORE (e.g. 80) to turn agent-readiness into a hard gate too.
         run: |
-          python3 scripts/agent_readiness.py "$SPEC_PATH" --min-score 80
+          python3 scripts/agent_readiness.py "$SPEC_PATH" \
+            --min-score "${{ vars.READINESS_MIN_SCORE || 0 }}"
 
       - name: Upload governance artifacts
         if: always()

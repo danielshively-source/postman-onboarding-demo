@@ -85,5 +85,10 @@ push to main / PR / dispatch
 | `POSTMAN_ACCESS_TOKEN` | secret | Optional pre-supplied access token (alternative to minting). |
 | `POSTMAN_LIVE` | variable | `true` enables the `onboard` job. |
 | `INSIGHTS_SECURITY_APPROVED` | variable | `true` (after sign-off) enables the `insights` job. |
+| `READINESS_MIN_SCORE` | variable | Optional. Set (e.g. `80`) to turn agent-readiness into a hard gate; unset = advisory. |
+
+**Gating model:** governance is the **hard gate** (blockers fail the build). Agent-readiness
+is **advisory by default** - it's scored and surfaced, so a governance-compliant but
+"needs-work" spec still passes - unless you opt in to enforcement via `READINESS_MIN_SCORE`.
 
 See [docs/PIPELINE.md](docs/PIPELINE.md#turning-on-the-live-postman-stages) to go live.

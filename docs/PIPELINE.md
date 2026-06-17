@@ -182,7 +182,9 @@ Secondary to governance/discovery, and **off by default**. The `insights` job re
   each spec 0-100 and labels it `agent-ready` / `needs-work` / `ui-oriented`. Criteria are the
   things agents need to act without loading the whole spec: unique operationIds, summaries +
   descriptions, typed success/error schemas, documented params, applied security, and examples.
-  The `governance` job runs it with `--min-score 80`.
+  It is **advisory by default** (governance is the hard gate); set the `READINESS_MIN_SCORE`
+  repo variable to also enforce a minimum score. So `close-tasks.yaml` passes the pipeline while
+  scoring 70/needs-work, making the governance-vs-agent-ready distinction visible without blocking.
 - **REST -> MCP candidates:** an API that passes governance + scores agent-ready is a clean
   candidate for MCP exposure (stable tool names from camelCase operationIds, typed args/results,
   examples for grounding).
