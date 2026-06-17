@@ -146,7 +146,19 @@ jobs:
           # Insights is handled in its own gated job below, not here.
           enable-insights: false
           postman-api-key: ${{ secrets.POSTMAN_API_KEY }}
+          # Access token enables repo-sync workspace linking (repo <-> workspace /
+          # API Catalog integration via the Bifrost API). Without it, linking is skipped.
+          postman-access-token: ${{ secrets.POSTMAN_ACCESS_TOKEN }}
           github-token: ${{ github.token }}
+
+      - name: Publish to Private API Network (discovery)
+        if: steps.onboard.outputs.workspace-id != ''
+        env:
+          POSTMAN_API_KEY: ${{ secrets.POSTMAN_API_KEY }}
+        run: |
+          python3 scripts/publish_pan.py \
+            "${{ steps.onboard.outputs.workspace-id }}" \
+            "${{ steps.meta.outputs.project-name }}"
 
       - name: Onboarding summary
         if: always()
@@ -162,9 +174,6 @@ jobs:
             echo "**Workspace:** ${{ steps.onboard.outputs.workspace-url }}"
             echo "**Spec ID:** ${{ steps.onboard.outputs.spec-id }}"
             echo "**Mock URL:** ${{ steps.onboard.outputs.mock-url }}"
-            echo ""
-            echo "_Publish the linked workspace/collection to the Private API Network"
-            echo "to complete catalog discovery. See docs/PIPELINE.md (Job 3)._"
           } >> "$GITHUB_STEP_SUMMARY"
 
   # ---------------------------------------------------------------------------
